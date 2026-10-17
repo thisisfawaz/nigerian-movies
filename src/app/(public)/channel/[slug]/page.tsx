@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ChannelArtwork } from "@/components/channel-artwork";
 import { ChannelVideoGrid } from "@/components/channel-video-grid";
-import { ExternalLinkIcon } from "@/components/icons";
 import { getCatalogueRepository } from "@/lib/repositories";
 
 // Cached with a short revalidation window so navigations are fast (the RSC
@@ -57,35 +55,18 @@ export default async function ChannelDetailPage({
         <div className="absolute inset-0 bg-black/90" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-10">
-        <Link href="/explore" className="text-sm text-muted hover:text-foreground">
-          ← Explore
-        </Link>
-
-        {/* Channel name at the top, before the video */}
-        <header className="mb-5 mt-3 flex items-center gap-3">
-          <span className="relative h-12 w-12 flex-none overflow-hidden rounded-lg border border-border bg-surface">
-            <ChannelArtwork channel={channel} priority sizes="48px" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold sm:text-3xl" title={channel.name}>
-              {channel.name}
-            </h1>
-            <a
-              href={channel.youtubeChannelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground"
-            >
-              <ExternalLinkIcon /> View on YouTube
-            </a>
-          </div>
-        </header>
-
+      <div className="relative z-10 mx-auto max-w-screen-2xl px-4 pb-8 pt-2 sm:px-6 lg:px-10">
         {videos.length > 0 ? (
           <ChannelVideoGrid
             channelSlug={channel.slug}
             channelName={channel.name}
+            channel={{
+              name: channel.name,
+              youtubeChannelUrl: channel.youtubeChannelUrl,
+              artwork: (
+                <ChannelArtwork channel={channel} priority sizes="48px" />
+              )
+            }}
             videos={videos.map((v) => ({
               videoId: v.videoId,
               title: v.title,
@@ -102,7 +83,7 @@ export default async function ChannelDetailPage({
         )}
 
         {channel.description ? (
-          <p className="mt-8 text-sm leading-relaxed text-muted">
+          <p className="mt-6 text-sm leading-relaxed text-muted">
             {channel.description}
           </p>
         ) : null}
