@@ -1,0 +1,5 @@
+{
+  "$comment": "YouFlix catalogue seed. Nigerian movie channels (Nollywood and related cinema) only. No categories are used at this time. This file intentionally contains no fabricated channel data — add real channels by pasting their YouTube channel URLs; the admin/catalogue tooling resolves metadata from the URL. The example entry below is commented out in spirit only: replace 'channels': [] with real entries when ready.",
+  "categories": [],
+  "channels": []
+}

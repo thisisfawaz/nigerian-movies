@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* Hide the scrollbar entirely while keeping the element scrollable. */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE/Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+
+  /*
+   * Shared cinematic thumbnail overlays. These sit as a separate layer over the
+   * original YouTube artwork — the image itself is never modified. The gradient
+   * only darkens the lower portion so titles stay legible while the upper part
+   * of the image is left intact.
+   *
+   *  - overlay-movie: 16:9 full-length movie cards (subtle).
+   *  - overlay-teaser: 9:16 portrait teaser cards (slightly stronger).
+   */
+  .overlay-movie {
+    background-image: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.38) 28%,
+      rgba(0, 0, 0, 0) 60%
+    );
+  }
+
+  .overlay-teaser {
+    background-image: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.45) 32%,
+      rgba(0, 0, 0, 0) 62%
+    );
+  }
+
+  /*
+   * Ambient channel backdrop. The channel's cover image is used as a fixed
+   * background layer that does NOT scroll with the page. It is heavily blurred
+   * and dimmed so foreground text and the player stay legible. The scale hides
+   * blur edge bleed; overflow-hidden on the wrapper clips it.
+   */
+  .ambient-backdrop {
+    background-color: hsl(var(--background));
+    background-size: cover;
+    background-position: center;
+    filter: blur(64px) saturate(1.2);
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+
+  /* Dark scrim layered over the ambient backdrop to guarantee text contrast. */
+  .ambient-scrim {
+    background-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.82) 45%,
+      rgba(0, 0, 0, 0.9) 100%
+    );
+  }
+
+  /*
+   * Faint film grain. Inline SVG feTurbulence gives a resolution-independent
+   * texture at very low opacity, removing the flat/plastic look without
+   * competing with content.
+   */
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.05;
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground;
+  }
+
+  /* Visible focus indicators for keyboard users (PRD §11.3). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-background;
+  }
+
+  /* Indeterminate top progress bar used during route transitions. */
+  @keyframes navprogress {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+
+  /* Respect reduced-motion preferences. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
