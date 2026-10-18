@@ -80,6 +80,9 @@ type YTNamespace = {
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+/** Seconds skipped by a double tap on the left or right half of the video. */
+const SEEK_STEP = 10;
+
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const total = Math.floor(seconds);
@@ -125,6 +128,9 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Direction of the last double-tap seek, cleared after a moment. */
+  const [seekHint, setSeekHint] = useState<"back" | "forward" | null>(null);
+  const seekHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Reveal the controls. Attached to both the wrapper and the interaction
@@ -168,7 +174,8 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
             rel: 0,
             modestbranding: 1,
             playsinline: 1,
-            iv_load_policy: 3
+            iv_load_policy: 3,
+            cc_load_policy: 0
           },
           events: {
             onReady: () => {
@@ -179,6 +186,20 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               setVolume(player.getVolume());
               setMuted(player.isMuted());
               onReady?.();
+
+              // Forcefully attempt to disable captions on load.
+              // We use a slight delay to ensure the caption module has initialized
+              // before we attempt to unload it, which is more reliable than setOption.
+              setTimeout(() => {
+                try {
+                  // @ts-ignore - unloadModule is part of the underlying YouTube API
+                  player.unloadModule('captions');
+                  // @ts-ignore
+                  player.unloadModule('cc');
+                } catch {
+                  // Silently fail if the module isn't loaded or supported
+                }
+              }, 500);
             },
             onStateChange: (event) => {
               if (cancelled) return;
@@ -229,6 +250,13 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
 
   useEffect(() => () => clearIdle(), [clearIdle]);
 
+  useEffect(
+    () => () => {
+      if (seekHintTimer.current) clearTimeout(seekHintTimer.current);
+    },
+    []
+  );
+
   const togglePlay = () => {
     const p = playerRef.current;
     if (!p) return;
@@ -265,7 +293,34 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
   };
 
   const toggleCaptions = () => {
-    playerRef.current?.toggleCaptions();
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      // Try the standard API method first
+      player.toggleCaptions();
+      
+      // Hack: The YouTube API often fails to redraw the caption layer immediately 
+      // after toggleCaptions(). We force a micro-seek after a short delay to 
+      // trigger the timeupdate event, which wakes up the caption renderer.
+      setTimeout(() => {
+        if (playerRef.current) {
+          const currentTime = playerRef.current.getCurrentTime();
+          // A 0.05s seek is imperceptible to the user but enough to force a redraw.
+          playerRef.current.seekTo(currentTime + 0.05, true);
+        }
+      }, 150);
+      
+    } catch {
+      // Fallback: forcefully unload the caption modules if toggle fails
+      try {
+        // @ts-ignore
+        player.unloadModule('captions');
+        // @ts-ignore
+        player.unloadModule('cc');
+      } catch {
+        // Silently fail if modules aren't supported
+      }
+    }
   };
 
   const changeRate = (value: number) => {
@@ -345,15 +400,52 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
         className="pointer-events-none absolute inset-0 h-full w-full scale-[1.015]"
       />
 
+      {/* Reveal layer. Sits beneath the centre button so it never swallows the
+          button's clicks. A single tap brings the controls back; a double tap on
+          the left or right half seeks back or forward. */}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-hidden="true"
+        onClick={() => {
+          setShowBar(true);
+          if (playing) armIdle();
+        }}
+        onDoubleClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const isLeftHalf = event.clientX - rect.left < rect.width / 2;
+          const target = Math.max(
+            0,
+            Math.min(current + (isLeftHalf ? -SEEK_STEP : SEEK_STEP), duration || 0)
+          );
+          seek(target);
+          setSeekHint(isLeftHalf ? "back" : "forward");
+          if (seekHintTimer.current) clearTimeout(seekHintTimer.current);
+          seekHintTimer.current = setTimeout(() => setSeekHint(null), 700);
+          setShowBar(true);
+          if (playing) armIdle();
+        }}
+        onPointerEnter={revealBar}
+        onPointerMove={revealBar}
+        onPointerDown={revealBar}
+        className="absolute inset-0 h-full w-full cursor-default bg-transparent"
+      />
+
       {/* Center play/pause button. Follows the control bar's visibility: shown
-          on hover, hidden when the pointer leaves. pointer-events-none so clicks
-          reach the interaction layer below. */}
+          on hover, hidden when the pointer leaves. */}
       <div
         className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150 ${
           showBar ? "opacity-100" : "opacity-0"
         }`}
       >
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white shadow-lg">
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={playing ? "Pause" : "Play"}
+          className={`flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white shadow-lg ${
+            showBar ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
+          }`}
+        >
           {playing ? (
             <svg viewBox="0 0 24 24" className="h-12 w-12 fill-current" aria-hidden="true">
               <rect x="6" y="5" width="4" height="14" rx="1" />
@@ -364,39 +456,22 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               <path d="M9 6.5v11a1.5 1.5 0 0 0 2.3 1.27l9-5.5a1.5 1.5 0 0 0 0-2.54l-9-5.5A1.5 1.5 0 0 0 9 6.5z" />
             </svg>
           )}
-        </span>
+        </button>
       </div>
 
-      {/* Interaction layer. Clicking the video toggles playback, matching the
-          behavior the native player would have provided. When the bar is hidden
-          a tap also reveals it. */}
-      <button
-        type="button"
-        aria-label={showBar ? (playing ? "Pause" : "Play") : "Show player controls"}
-        onClick={() => {
-          // While paused the intent is always "start playing", so act on the
-          // first click and reveal the bar alongside it. While playing, a tap
-          // on a hidden bar only brings the controls back.
-          if (!playing) {
-            setShowBar(true);
-            togglePlay();
-            return;
-          }
-          if (!showBar) {
-            setShowBar(true);
-            armIdle();
-            return;
-          }
-          togglePlay();
-        }}
-        onDoubleClick={() => {
-          void toggleFullscreen();
-        }}
-        onPointerEnter={revealBar}
-        onPointerMove={revealBar}
-        onPointerDown={revealBar}
-        className="absolute inset-0 h-full w-full cursor-pointer bg-transparent"
-      />
+      {/* Seek indicator, shown briefly after a double-tap. */}
+      {seekHint ? (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 flex w-1/2 items-center justify-center text-white transition-opacity duration-150 ${
+            seekHint === "back" ? "left-0" : "right-0"
+          }`}
+        >
+          <span className="rounded-full bg-black/60 px-3 py-1 text-sm font-semibold">
+            {seekHint === "back" ? `-${SEEK_STEP}` : `+${SEEK_STEP}`}
+          </span>
+        </div>
+      ) : null}
 
       <div
         className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 pb-2 pt-8 transition-opacity duration-150 ${

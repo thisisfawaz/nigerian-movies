@@ -87,7 +87,7 @@ export function ChannelVideoGrid({
         </div>
 
         {/* Channel identity on the left, playing title + heart on the right. */}
-        <header className="mx-auto flex w-full min-w-0 max-w-[calc(65vh*16/9)] flex-col gap-2 border-b border-white/10 pb-3 sm:flex-row sm:items-center sm:gap-3">
+        <header className="mx-auto mt-4 flex w-full min-w-0 max-w-[calc(65vh*16/9)] flex-col gap-2 border-b border-white/10 pb-3 sm:flex-row sm:items-center sm:gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="relative h-10 w-10 flex-none overflow-hidden rounded-lg border border-border bg-surface">
               {channel.artwork}
