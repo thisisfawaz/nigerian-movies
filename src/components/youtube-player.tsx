@@ -526,7 +526,7 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
             {formatTime(current)} / {formatTime(duration)}
           </span>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 pr-2">
             <button
               type="button"
               onClick={toggleMute}
