@@ -331,8 +331,9 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
 
   /**
    * Fullscreen plus landscape. Orientation lock only works while the document is
-   * fullscreen and is unsupported on iOS Safari, so both steps are optional and
-   * failure is silent: the user still gets fullscreen, just without rotation.
+   * fullscreen. We add a slight delay before locking to avoid race conditions on
+   * Android Chrome. iOS Safari does not support programmatic orientation locking,
+   * so it will rely on the user physically rotating their device.
    */
   const toggleFullscreen = async () => {
     const bar = barRef.current;
@@ -342,13 +343,26 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
         await document.exitFullscreen();
         return;
       }
-      await bar.requestFullscreen();
-      const orientation = screen.orientation as
-        | (ScreenOrientation & { lock?: (o: string) => Promise<void> })
-        | undefined;
-      if (orientation?.lock) {
-        await orientation.lock("landscape").catch(() => undefined);
+      
+      // Request fullscreen
+      if (bar.requestFullscreen) {
+        await bar.requestFullscreen();
+      } else if ((bar as any).webkitRequestFullscreen) {
+        await (bar as any).webkitRequestFullscreen();
       }
+
+      // Delay orientation lock slightly to ensure fullscreen is fully active.
+      // This is a known workaround for Android Chrome race conditions.
+      setTimeout(async () => {
+        const orientation = screen.orientation as any;
+        if (orientation?.lock) {
+          try {
+            await orientation.lock("landscape");
+          } catch {
+            // Ignore errors (e.g., iOS Safari doesn't support this, or user denied)
+          }
+        }
+      }, 300);
     } catch {
       // Fullscreen can be rejected (e.g. not a user gesture). Nothing to do.
     }
