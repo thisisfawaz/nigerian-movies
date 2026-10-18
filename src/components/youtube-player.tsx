@@ -526,7 +526,7 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
             {formatTime(current)} / {formatTime(duration)}
           </span>
 
-          <div className="ml-auto flex items-center gap-3 sm:gap-4 pr-2 sm:pr-4">
+          <div className="ml-auto flex items-center gap-2 pr-2 sm:pr-4">
             <button
               type="button"
               onClick={toggleMute}
@@ -605,7 +605,7 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               type="button"
               onClick={toggleFullscreen}
               aria-label="Fullscreen"
-              className="rounded p-1 hover:bg-white/15 ml-2 sm:ml-4"
+              className="ml-auto rounded p-1 hover:bg-white/15"
             >
               ⛶
             </button>
