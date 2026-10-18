@@ -605,7 +605,7 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               type="button"
               onClick={toggleFullscreen}
               aria-label="Fullscreen"
-              className="ml-auto rounded p-1 hover:bg-white/15"
+              className="rounded p-1 hover:bg-white/15 ml-8 sm:ml-12"
             >
               ⛶
             </button>
