@@ -70,15 +70,15 @@ test("uploadsPlaylistFromChannelId maps UC->UU only for valid ids", () => {
 test("buildEmbedUrl only uses trusted templates", () => {
   assert.equal(
     buildEmbedUrl({ type: "video", videoId: "dQw4w9WgXcQ" }),
-    "https://www.youtube.com/embed/dQw4w9WgXcQ"
+    "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
   );
   assert.equal(
     buildEmbedUrl({ type: "playlist", playlistId: "PL0123456789abcdef" }),
-    "https://www.youtube.com/embed/videoseries?list=PL0123456789abcdef"
+    "https://www.youtube-nocookie.com/embed/videoseries?list=PL0123456789abcdef"
   );
   assert.equal(
     buildEmbedUrl({ type: "channel", channelId: "UCBR8-60-B28hp2BmDPdntcQ" }),
-    "https://www.youtube.com/embed/videoseries?list=UUBR8-60-B28hp2BmDPdntcQ"
+    "https://www.youtube-nocookie.com/embed/videoseries?list=UUBR8-60-B28hp2BmDPdntcQ"
   );
   assert.equal(buildEmbedUrl({ type: "channel" }), null);
 });

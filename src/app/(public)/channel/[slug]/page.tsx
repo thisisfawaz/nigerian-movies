@@ -55,7 +55,7 @@ export default async function ChannelDetailPage({
         <div className="absolute inset-0 bg-black/90" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-screen-2xl px-4 pb-8 pt-2 sm:px-6 lg:px-10">
+      <div className="relative z-10 mx-auto max-w-screen-2xl px-4 pb-8 pt-0 sm:px-6 sm:pt-2 lg:px-10">
         {videos.length > 0 ? (
           <ChannelVideoGrid
             channelSlug={channel.slug}

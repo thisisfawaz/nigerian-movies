@@ -153,16 +153,17 @@ export function parseYoutubeUrl(input: string): ParsedYoutubeResource | null {
 export function buildEmbedUrl(
   resource: Pick<ParsedYoutubeResource, "type" | "channelId" | "playlistId" | "videoId">
 ): string | null {
+  // Privacy-enhanced host: no tracking cookies are set until playback starts.
   if (resource.type === "video" && resource.videoId) {
-    return `https://www.youtube.com/embed/${resource.videoId}`;
+    return `https://www.youtube-nocookie.com/embed/${resource.videoId}`;
   }
   if (resource.type === "playlist" && resource.playlistId) {
-    return `https://www.youtube.com/embed/videoseries?list=${resource.playlistId}`;
+    return `https://www.youtube-nocookie.com/embed/videoseries?list=${resource.playlistId}`;
   }
   if (resource.type === "channel" && resource.channelId) {
     const uploads = uploadsPlaylistFromChannelId(resource.channelId);
     if (uploads) {
-      return `https://www.youtube.com/embed/videoseries?list=${uploads}`;
+      return `https://www.youtube-nocookie.com/embed/videoseries?list=${uploads}`;
     }
   }
   return null;

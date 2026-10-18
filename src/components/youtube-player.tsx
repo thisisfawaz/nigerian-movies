@@ -1,0 +1,529 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+/**
+ * YouTube player built on the IFrame Player API rather than a plain <iframe>.
+ *
+ * A plain embed cannot be controlled from our page at all — no pause events, no
+ * way to hide YouTube's own controls, no programmatic fullscreen. The API gives
+ * us those hooks, so we set controls=0 and draw our own bar. That also removes
+ * Share / Watch Later / related-video chrome, which a plain embed always shows.
+ *
+ * The API script needs no key and no account.
+ */
+
+const API_SRC = "https://www.youtube.com/iframe_api";
+const NC_HOST = "https://www.youtube-nocookie.com";
+
+// Module-level so the script is requested once no matter how many players mount.
+let apiPromise: Promise<void> | null = null;
+
+function loadApi(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (apiPromise) return apiPromise;
+
+  apiPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${API_SRC}"]`);
+
+    // The API calls a global callback when it finishes loading.
+    (window as unknown as { onYouTubeIframeAPIReady?: () => void }).onYouTubeIframeAPIReady =
+      () => resolve();
+
+    if (existing) return;
+
+    const script = document.createElement("script");
+    script.src = API_SRC;
+    script.async = true;
+    script.onerror = () => reject(new Error("Failed to load the YouTube IFrame API"));
+    document.head.appendChild(script);
+  });
+
+  return apiPromise;
+}
+
+/** Minimal shape of the API surface we actually use. */
+type YTPlayer = {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  getVolume: () => number;
+  setVolume: (v: number) => void;
+  mute: () => void;
+  unMute: () => void;
+  isMuted: () => boolean;
+  setPlaybackRate: (rate: number) => void;
+  getPlaybackRate: () => number;
+  getAvailablePlaybackRates: () => number[];
+  toggleCaptions: () => void;
+  destroy: () => void;
+  addEventListener: (event: string, cb: (e: { data: number }) => void) => void;
+};
+
+type YTNamespace = {
+  Player: new (
+    el: HTMLElement | string,
+    opts: {
+      videoId: string;
+      host?: string;
+      playerVars?: Record<string, string | number>;
+      events?: {
+        onReady?: () => void;
+        onStateChange?: (e: { data: number }) => void;
+      };
+    }
+  ) => YTPlayer;
+  PlayerState: { PLAYING: number; PAUSED: number; ENDED: number; BUFFERING: number };
+};
+
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
+
+export interface YouTubePlayerProps {
+  videoId: string;
+  title: string;
+  /** Called once the player is ready, so the page can drop its own spinner. */
+  onReady?: () => void;
+}
+
+/**
+ * The controls auto-hide. There are two triggers, and they behave differently
+ * on purpose:
+ *
+ *  - Mouse leaves the player: hide immediately. The pointer is gone, so there
+ *    is nothing to click.
+ *  - Playback pauses: hide immediately, same as mouse-out.
+ *
+ * On touch devices there is no hover, so tapping the video toggles the bar and
+ * it hides on its own after a few seconds.
+ */
+export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [showBar, setShowBar] = useState(true);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(100);
+  const [muted, setMuted] = useState(false);
+  const [rate, setRate] = useState(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /**
+   * Reveal the controls. Attached to both the wrapper and the interaction
+   * layer: the layer covers the whole player and receives the pointer events
+   * in practice, so relying on the wrapper alone missed hover entirely.
+   */
+  const revealBar = () => {
+    setShowBar(true);
+    if (playing) armIdle();
+  };
+
+  const clearIdle = useCallback(() => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = null;
+  }, []);
+
+  // While playing, hide the bar after a short idle period so the video is clean.
+  const armIdle = useCallback(() => {
+    clearIdle();
+    idleTimer.current = setTimeout(() => setShowBar(false), 3000);
+  }, [clearIdle]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadApi()
+      .then(() => {
+        if (cancelled || !containerRef.current) return;
+        const YT = (window as unknown as { YT: YTNamespace }).YT;
+        if (!YT) {
+          setFailed(true);
+          return;
+        }
+
+        const player = new YT.Player(containerRef.current, {
+          videoId,
+          host: NC_HOST,
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            iv_load_policy: 3
+          },
+          events: {
+            onReady: () => {
+              if (cancelled) return;
+              playerRef.current = player;
+              setReady(true);
+              setDuration(player.getDuration());
+              setVolume(player.getVolume());
+              setMuted(player.isMuted());
+              onReady?.();
+            },
+            onStateChange: (event) => {
+              if (cancelled) return;
+              if (event.data === YT.PlayerState.PLAYING) {
+                setPlaying(true);
+                setPaused(false);
+                armIdle();
+              } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                setPlaying(false);
+                // Hide the bar immediately on pause, and cover YouTube's bottom
+                // overlay strip (which no embed parameter suppresses). The video
+                // frame itself stays visible.
+                setPaused(true);
+                clearIdle();
+                setShowBar(false);
+                setSettingsOpen(false);
+              }
+            }
+          }
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+      clearIdle();
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+    // Re-create the player when the selected video changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId]);
+
+  // Poll playback position. The API has no timeupdate event.
+  useEffect(() => {
+    if (!ready) return;
+    const id = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      setCurrent(p.getCurrentTime());
+      const d = p.getDuration();
+      if (d && d !== duration) setDuration(d);
+    }, 500);
+    return () => clearInterval(id);
+  }, [ready, duration]);
+
+  useEffect(() => () => clearIdle(), [clearIdle]);
+
+  const togglePlay = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+  };
+
+  const seek = (seconds: number) => {
+    playerRef.current?.seekTo(seconds, true);
+    setCurrent(seconds);
+  };
+
+  const changeVolume = (v: number) => {
+    const p = playerRef.current;
+    if (!p) return;
+    p.setVolume(v);
+    setVolume(v);
+    if (v > 0 && p.isMuted()) {
+      p.unMute();
+      setMuted(false);
+    }
+  };
+
+  const toggleMute = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (p.isMuted()) {
+      p.unMute();
+      setMuted(false);
+    } else {
+      p.mute();
+      setMuted(true);
+    }
+  };
+
+  const toggleCaptions = () => {
+    playerRef.current?.toggleCaptions();
+  };
+
+  const changeRate = (value: number) => {
+    playerRef.current?.setPlaybackRate(value);
+    setRate(value);
+    setSettingsOpen(false);
+  };
+
+  /**
+   * Fullscreen plus landscape. Orientation lock only works while the document is
+   * fullscreen and is unsupported on iOS Safari, so both steps are optional and
+   * failure is silent: the user still gets fullscreen, just without rotation.
+   */
+  const toggleFullscreen = async () => {
+    const bar = barRef.current;
+    if (!bar) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+      await bar.requestFullscreen();
+      const orientation = screen.orientation as
+        | (ScreenOrientation & { lock?: (o: string) => Promise<void> })
+        | undefined;
+      if (orientation?.lock) {
+        await orientation.lock("landscape").catch(() => undefined);
+      }
+    } catch {
+      // Fullscreen can be rejected (e.g. not a user gesture). Nothing to do.
+    }
+  };
+
+  // Leaving fullscreen should release the orientation lock as well.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) screen.orientation?.unlock?.();
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  if (failed) {
+    return (
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-black p-6 text-center text-sm text-white">
+        <p>The player could not be loaded.</p>
+        <a
+          href={`https://www.youtube.com/watch?v=${videoId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2"
+        >
+          Watch on YouTube
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={barRef}
+      className="group/player relative h-full w-full bg-black"
+      onMouseLeave={() => {
+        // Leaving hides the bar in both states; the pointer is gone either way.
+        clearIdle();
+        setShowBar(false);
+        setSettingsOpen(false);
+      }}
+    >
+      {/* The API replaces this element with its own iframe.
+          pointer-events-none keeps the pointer away from YouTube's document, so
+          its hover chrome (wordmark, Watch on YouTube, title bar) never appears.
+          The cost is that the iframe itself is no longer interactive, so the
+          click layer below routes interaction through the API instead. */}
+      <div
+        ref={containerRef}
+        className="pointer-events-none absolute inset-0 h-full w-full scale-[1.015]"
+      />
+
+      {/* Center play/pause button. Follows the control bar's visibility: shown
+          on hover, hidden when the pointer leaves. pointer-events-none so clicks
+          reach the interaction layer below. */}
+      <div
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150 ${
+          showBar ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white shadow-lg">
+          {playing ? (
+            <svg viewBox="0 0 24 24" className="h-12 w-12 fill-current" aria-hidden="true">
+              <rect x="6" y="5" width="4" height="14" rx="1" />
+              <rect x="14" y="5" width="4" height="14" rx="1" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" className="h-12 w-12 -translate-x-1 fill-current" aria-hidden="true">
+              <path d="M9 6.5v11a1.5 1.5 0 0 0 2.3 1.27l9-5.5a1.5 1.5 0 0 0 0-2.54l-9-5.5A1.5 1.5 0 0 0 9 6.5z" />
+            </svg>
+          )}
+        </span>
+      </div>
+
+      {/* Interaction layer. Clicking the video toggles playback, matching the
+          behavior the native player would have provided. When the bar is hidden
+          a tap also reveals it. */}
+      <button
+        type="button"
+        aria-label={showBar ? (playing ? "Pause" : "Play") : "Show player controls"}
+        onClick={() => {
+          // While paused the intent is always "start playing", so act on the
+          // first click and reveal the bar alongside it. While playing, a tap
+          // on a hidden bar only brings the controls back.
+          if (!playing) {
+            setShowBar(true);
+            togglePlay();
+            return;
+          }
+          if (!showBar) {
+            setShowBar(true);
+            armIdle();
+            return;
+          }
+          togglePlay();
+        }}
+        onDoubleClick={() => {
+          void toggleFullscreen();
+        }}
+        onPointerEnter={revealBar}
+        onPointerMove={revealBar}
+        onPointerDown={revealBar}
+        className="absolute inset-0 h-full w-full cursor-pointer bg-transparent"
+      />
+
+      <div
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 pb-2 pt-8 transition-opacity duration-150 ${
+          showBar ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={0.1}
+          value={Math.min(current, duration || 0)}
+          onChange={(e) => seek(Number(e.target.value))}
+          aria-label="Seek"
+          className="mb-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-white/30 accent-white"
+        />
+
+        <div className="flex items-center gap-2 text-white">
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label={playing ? "Pause" : "Play"}
+            className="rounded p-1 hover:bg-white/15"
+          >
+            {playing ? (
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+                <rect x="6" y="5" width="4" height="14" rx="1" />
+                <rect x="14" y="5" width="4" height="14" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </button>
+
+          <span className="whitespace-nowrap text-xs tabular-nums text-white/85">
+            {formatTime(current)} / {formatTime(duration)}
+          </span>
+
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-label={muted ? "Unmute" : "Mute"}
+              className="rounded p-1 hover:bg-white/15"
+            >
+              {muted || volume === 0 ? "🔇" : "🔊"}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={muted ? 0 : volume}
+              onChange={(e) => changeVolume(Number(e.target.value))}
+              aria-label="Volume"
+              className="hidden h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/30 accent-white sm:block"
+            />
+
+            <button
+              type="button"
+              onClick={toggleCaptions}
+              aria-label="Toggle subtitles"
+              className="rounded px-1 text-xs font-semibold hover:bg-white/15"
+            >
+              CC
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-label="Settings"
+                aria-expanded={settingsOpen}
+                className="rounded p-1 hover:bg-white/15"
+              >
+                ⚙
+              </button>
+              {settingsOpen ? (
+                <div className="absolute bottom-full right-0 mb-2 w-40 rounded-md bg-black/90 p-2 text-xs shadow-lg">
+                  <p className="mb-1 px-1 text-white/60">Speed</p>
+                  {RATES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => changeRate(r)}
+                      className={`flex w-full items-center justify-between rounded px-1 py-0.5 hover:bg-white/15 ${
+                        rate === r ? "text-white" : "text-white/70"
+                      }`}
+                    >
+                      <span>{r === 1 ? "Normal" : `${r}x`}</span>
+                      {rate === r ? <span>✓</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <a
+              href={`https://www.youtube.com/watch?v=${videoId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden whitespace-nowrap rounded px-2 py-1 text-xs text-white/85 hover:bg-white/15 sm:block"
+            >
+              Watch on YouTube
+            </a>
+
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              aria-label="Fullscreen"
+              className="rounded p-1 hover:bg-white/15"
+            >
+              ⛶
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {!ready ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 text-white">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        </div>
+      ) : null}
+
+      {/* Accessible name for the embedded player region. */}
+      <span className="sr-only">{title}</span>
+    </div>
+  );
+}

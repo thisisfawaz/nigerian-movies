@@ -1,16 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { FavouriteButton } from "@/components/favourite-button";
 import { ExternalLinkIcon } from "@/components/icons";
-import { InlineSpinner } from "@/components/loading";
 import { PlayBadge } from "@/components/play-badge";
 import { ScrollRow } from "@/components/scroll-row";
 import { VideoThumbnail } from "@/components/video-thumbnail";
 import { MovieTitle } from "@/components/movie-title";
+import { YouTubePlayer } from "@/components/youtube-player";
 import { cleanTitle } from "@/lib/titles";
 
 interface Video {
@@ -53,40 +52,12 @@ export function ChannelVideoGrid({
   const [current, setCurrent] = useState<string | null>(
     searchParams.get("v") ?? fullMovies[0]?.videoId ?? videos[0]?.videoId ?? null
   );
-  const [playerLoading, setPlayerLoading] = useState(true);
-  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const allById = new Map(videos.map((v) => [v.videoId, v]));
   const playing =
     (current ? allById.get(current) : undefined) ?? fullMovies[0] ?? videos[0];
 
-  // The iframe onLoad is not always reliable (it can fire before React attaches
-  // the handler, or not at all in some cases), so we also clear the spinner on
-  // a short timeout. Either way, the spinner always goes away.
-  const clearLoading = () => {
-    if (loadTimer.current) clearTimeout(loadTimer.current);
-    loadTimer.current = null;
-    setPlayerLoading(false);
-  };
-
-  const startLoading = () => {
-    setPlayerLoading(true);
-    if (loadTimer.current) clearTimeout(loadTimer.current);
-    loadTimer.current = setTimeout(() => setPlayerLoading(false), 4000);
-  };
-
-  useEffect(() => {
-    startLoading();
-    return () => {
-      if (loadTimer.current) clearTimeout(loadTimer.current);
-    };
-    // Re-arm whenever the selected video changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing?.videoId]);
-
   const select = (videoId: string) => {
     setCurrent(videoId);
-    startLoading();
     const url = new URL(window.location.href);
     url.searchParams.set("v", videoId);
     window.history.replaceState(null, "", url.toString());
@@ -95,45 +66,22 @@ export function ChannelVideoGrid({
 
   return (
     <div>
-      <div className="relative flex flex-col gap-4 pt-2 lg:pt-4">
-        {/* Mobile: Explore inline above the player. */}
-        <Link
-          href="/explore"
-          className="text-sm text-muted hover:text-foreground lg:hidden"
-        >
-          ← Explore
-        </Link>
-
-        {/* Desktop: Explore pinned to the container's far left, top level with
-            the player (which starts at the container's lg:pt-8). */}
-        <Link
-          href="/explore"
-          className="absolute left-0 top-2 hidden whitespace-nowrap text-sm text-muted hover:text-foreground lg:top-4 lg:block"
-        >
-          ← Explore
-        </Link>
-
-        {/* Player wrapper is width-matched to the player. */}
-        <div className="relative mx-auto -mt-[2px] w-full min-w-0 max-w-[calc(65vh*16/9)] sm:mt-0">
+      <div className="relative flex flex-col gap-4 pt-0 lg:pt-4">
+        {/* Player wrapper is width-matched to the player.
+            Mobile: full-bleed edge-to-edge. We break out of the page's px-4
+            with negative margins and w-full (NOT 100vw — 100vw includes the
+            scrollbar width and caused a black band on the right on desktop).
+            The 65vh cap and centring only apply from sm up. */}
+        <div className="relative -mx-4 w-[calc(100%+2rem)] min-w-0 sm:mx-auto sm:w-full sm:max-w-[calc(65vh*16/9)]">
           {/* Player: width comes from the 65vh cap so the video fills the frame
-              exactly (no letterboxing) and sits centred. */}
-          <div className="relative aspect-video w-full overflow-hidden rounded-card border border-border">
+              exactly (no letterboxing) and sits centred. On mobile it is
+              square-cornered and borderless, like the YouTube app. */}
+          {/* The box stays 16:9 at every breakpoint. The player inside is
+              overscanned and clipped (see YouTubePlayer), so wide films fill
+              the frame instead of showing letterbox bars. */}
+          <div className="relative mx-auto aspect-video w-full overflow-hidden border-0 sm:rounded-card sm:border sm:border-border">
             {playing ? (
-              <iframe
-                key={playing.videoId}
-                src={`https://www.youtube.com/embed/${playing.videoId}?autoplay=1`}
-                title={playing.title}
-                className="h-full w-full"
-                onLoad={clearLoading}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            ) : null}
-            {playing && playerLoading ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 text-white">
-                <InlineSpinner className="h-8 w-8" />
-              </div>
+              <YouTubePlayer key={playing.videoId} videoId={playing.videoId} title={playing.title} />
             ) : null}
           </div>
         </div>
