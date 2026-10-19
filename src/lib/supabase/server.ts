@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-import { publicSupabaseConfig, isSupabaseConfigured } from "@/lib/env";
+import { publicSupabaseConfig, isSupabaseConfigured, adminEmail } from "@/lib/env";
 
 /**
  * Cookie-bound Supabase client for the admin auth session.
@@ -46,6 +46,7 @@ export function getServerAuthClient() {
 /**
  * Returns the authenticated admin user, or null.
  * Server-side authorization must always use this (PRD §6.1).
+ * Additionally verifies that the user's email matches the configured ADMIN_EMAIL.
  */
 export async function getAdminUser() {
   const client = getServerAuthClient();
@@ -53,7 +54,16 @@ export async function getAdminUser() {
   const {
     data: { user }
   } = await client.auth.getUser();
-  return user ?? null;
+  
+  if (!user) return null;
+  
+  // Enforce admin email restriction on the server side. Fails closed: with no
+  // ADMIN_EMAIL configured, no user is an admin.
+  if (!adminEmail || user.email?.toLowerCase() !== adminEmail) {
+    return null;
+  }
+  
+  return user;
 }
 
 /**

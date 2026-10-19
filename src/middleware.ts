@@ -48,12 +48,20 @@ export async function middleware(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  // Protect all /admin routes except the login page.
-  if (isAdminRoute && !request.nextUrl.pathname.startsWith("/admin/login") && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  // Protect all /admin routes except the login page. Fails closed: if
+  // ADMIN_EMAIL is unset, nobody is treated as an admin rather than everybody.
+  if (isAdminRoute && !request.nextUrl.pathname.startsWith("/admin/login")) {
+    if (!user || !adminEmail || user.email?.toLowerCase() !== adminEmail) {
+      // Sign out any unauthorized or non-matching user to clear their session,
+      // then send them home. No hint that /admin exists.
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;
