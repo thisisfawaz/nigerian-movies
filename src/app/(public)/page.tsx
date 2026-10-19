@@ -72,11 +72,19 @@ export default async function HomePage() {
       <div className="mx-auto max-w-screen-2xl px-4 py-8 sm:px-6 lg:px-10">
         <MovieBannerCarousel title="Featured Movies" videos={fullMovies} />
 
-        <MovieBannerCarousel
-          title="Recently added"
-          videos={recentlyAdded}
-          size="compact"
-        />
+        <section className="mb-10">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Recently added</h2>
+            <Link href="/movies" className="text-sm font-semibold text-pop hover:underline">
+              All movies
+            </Link>
+          </div>
+          <MovieBannerCarousel
+            title=""
+            videos={recentlyAdded}
+            size="compact"
+          />
+        </section>
 
         <MoviePortraitRow title="Channel Teasers" videos={teasers} />
 

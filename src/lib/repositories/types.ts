@@ -50,6 +50,9 @@ export interface CatalogueRepository {
 
   /** Full movies published within a calendar year, across published channels. */
   listMoviesByYear(year: number, limit?: number): Promise<RecentVideo[]>;
+
+  /** All full-length movies across published channels, paginated. */
+  listAllMovies(page: number, pageSize: number): Promise<Paginated<RecentVideo>>;
 }
 
 /**

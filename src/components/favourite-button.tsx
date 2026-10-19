@@ -147,7 +147,7 @@ export function FavouriteButton({
               </p>
 
               <div className="mt-5">
-                <GoogleSignInButton />
+                <GoogleSignInButton next={typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/'} />
               </div>
 
               <button

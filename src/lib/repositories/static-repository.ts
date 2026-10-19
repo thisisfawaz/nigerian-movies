@@ -248,6 +248,11 @@ export class StaticFileRepository implements MutableCatalogueRepository {
     return [];
   }
 
+  async listAllMovies(_page: number, _pageSize: number): Promise<Paginated<RecentVideo>> {
+    // Movie rows live in the database; nothing to read in static mode.
+    return { items: [], total: 0, page: _page, pageSize: _pageSize };
+  }
+
   replaceChannelVideos(
     _channelId: string,
     _videos: ChannelVideoInput[]

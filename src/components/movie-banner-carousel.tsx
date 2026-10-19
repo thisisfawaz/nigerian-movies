@@ -17,12 +17,14 @@ import { MovieTitle } from "@/components/movie-title";
 export function MovieBannerCarousel({
   title,
   videos,
-  size = "large"
+  size = "large",
+  allHref
 }: {
-  title: string;
+  title?: string;
   videos: RecentVideo[];
   /** "large" = Latest Movies (~2.5 visible); "compact" = Recently Added (~4). */
   size?: "large" | "compact";
+  allHref?: string;
 }) {
   if (videos.length === 0) return null;
 
@@ -34,7 +36,16 @@ export function MovieBannerCarousel({
 
   return (
     <section className="mb-10">
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+      {title ? (
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          {allHref ? (
+            <Link href={allHref} className="text-sm font-semibold text-pop hover:underline">
+              All movies
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       <ScrollRow wrapperClassName="-mx-1" trackClassName="snap-x snap-mandatory gap-4 px-1 pb-3">
         {videos.map((video) => (
           <li

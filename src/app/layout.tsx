@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Suspense } from "react";
+import { ViewTransitions } from "next-view-transitions";
 
 import { NavProgress } from "@/components/nav-progress";
 
@@ -29,10 +30,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body>
-        <Suspense fallback={null}>
-          <NavProgress />
-        </Suspense>
-        {children}
+        <ViewTransitions>
+          <Suspense fallback={null}>
+            <NavProgress />
+          </Suspense>
+          {children}
+        </ViewTransitions>
       </body>
     </html>
   );

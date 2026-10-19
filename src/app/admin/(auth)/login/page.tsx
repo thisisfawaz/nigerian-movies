@@ -1,9 +1,6 @@
 import Link from "next/link";
 
-import { SubmitButton } from "@/components/submit-button";
-import { Input, Label } from "@/components/ui";
-
-import { loginAction } from "./actions";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export const metadata = { title: "Admin sign in" };
 
@@ -18,7 +15,7 @@ export default function LoginPage({
         You<span className="text-pop">Flix</span>
       </Link>
       <h1 className="mt-4 text-2xl font-semibold">Admin sign in</h1>
-      <p className="mt-1 text-sm text-muted">Sign in to manage the catalogue.</p>
+      <p className="mt-1 text-sm text-muted">Sign in with Google to manage the catalogue.</p>
 
       {searchParams.error ? (
         <p
@@ -29,24 +26,9 @@ export default function LoginPage({
         </p>
       ) : null}
 
-      <form action={loginAction} className="mt-6 space-y-4 rounded-card border border-border bg-surface p-5">
-        <input type="hidden" name="next" value={searchParams.next ?? "/admin"} />
-        <div>
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" required autoComplete="email" />
-        </div>
-        <div>
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-          />
-        </div>
-        <SubmitButton pendingLabel="Signing in…">Sign in</SubmitButton>
-      </form>
+      <div className="mt-6 space-y-4 rounded-card border border-border bg-surface p-5">
+        <GoogleSignInButton next="/admin" label="Sign in with Google" />
+      </div>
     </main>
   );
 }

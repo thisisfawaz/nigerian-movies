@@ -725,6 +725,54 @@ export class SupabaseCatalogueRepository implements MutableCatalogueRepository {
     });
   }
 
+  async listAllMovies(page: number, pageSize: number): Promise<Paginated<RecentVideo>> {
+    const MIN_MOVIE_SECONDS = 59 * 60;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await this.client
+      .from("channel_videos")
+      .select(
+        "video_id, title, thumbnail_url, published_at, is_short, duration_seconds, channel_id, channels!inner(name, slug, status)",
+        { count: "exact" }
+      )
+      .eq("is_short", false)
+      .gte("duration_seconds", MIN_MOVIE_SECONDS)
+      .eq("channels.status", "published")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("video_id", { ascending: false })
+      .range(from, to);
+
+    if (error) throw new Error(`Failed to load all movies: ${error.message}`);
+
+    const items = (data as unknown as Array<{
+      video_id: string;
+      title: string;
+      thumbnail_url: string | null;
+      published_at: string | null;
+      is_short: boolean;
+      duration_seconds?: number | null;
+      channel_id: string;
+      channels: { name: string; slug: string } | { name: string; slug: string }[] | null;
+    }>).map((row) => {
+      const ch = Array.isArray(row.channels) ? row.channels[0] : row.channels;
+      return {
+        videoId: row.video_id,
+        title: row.title,
+        thumbnailUrl: row.thumbnail_url,
+        publishedAt: row.published_at,
+        isShort: row.is_short,
+        durationSeconds:
+          typeof row.duration_seconds === "number" ? row.duration_seconds : null,
+        channelId: row.channel_id,
+        channelName: ch?.name ?? "Channel",
+        channelSlug: ch?.slug ?? ""
+      };
+    });
+
+    return { items, total: count ?? items.length, page, pageSize };
+  }
+
   async createCategory(input: CategoryInput): Promise<Category> {
     const { data, error } = await this.client
       .from("categories")

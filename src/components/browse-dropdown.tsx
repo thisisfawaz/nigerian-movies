@@ -32,6 +32,14 @@ export function BrowseDropdown({
               </Link>
             </li>
           ))}
+          <li className="border-t border-border">
+            <Link
+              href="/movies"
+              className="block px-4 py-2 text-sm font-semibold text-pop hover:bg-pop hover:text-pop-foreground"
+            >
+              All movies
+            </Link>
+          </li>
         </ul>
       </div>
     </div>

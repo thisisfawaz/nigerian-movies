@@ -72,6 +72,12 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const isAdminEnabled = isSupabaseConfigured;
 
 /**
+ * The single email address authorized to access the admin dashboard.
+ * Normalized to lowercase for case-insensitive comparison.
+ */
+export const adminEmail = clean(process.env.ADMIN_EMAIL)?.toLowerCase();
+
+/**
  * AI categorization is opt-in. It must never be required for the app to work.
  */
 export const isAiEnabled =
