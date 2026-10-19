@@ -292,37 +292,6 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
     }
   };
 
-  const toggleCaptions = () => {
-    const player = playerRef.current;
-    if (!player) return;
-    try {
-      // Try the standard API method first
-      player.toggleCaptions();
-      
-      // Hack: The YouTube API often fails to redraw the caption layer immediately 
-      // after toggleCaptions(). We force a micro-seek after a short delay to 
-      // trigger the timeupdate event, which wakes up the caption renderer.
-      setTimeout(() => {
-        if (playerRef.current) {
-          const currentTime = playerRef.current.getCurrentTime();
-          // A 0.05s seek is imperceptible to the user but enough to force a redraw.
-          playerRef.current.seekTo(currentTime + 0.05, true);
-        }
-      }, 150);
-      
-    } catch {
-      // Fallback: forcefully unload the caption modules if toggle fails
-      try {
-        // @ts-ignore
-        player.unloadModule('captions');
-        // @ts-ignore
-        player.unloadModule('cc');
-      } catch {
-        // Silently fail if modules aren't supported
-      }
-    }
-  };
-
   const changeRate = (value: number) => {
     playerRef.current?.setPlaybackRate(value);
     setRate(value);
@@ -552,15 +521,6 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               aria-label="Volume"
               className="hidden h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/30 accent-white sm:block"
             />
-
-            <button
-              type="button"
-              onClick={toggleCaptions}
-              aria-label="Toggle subtitles"
-              className="rounded px-1 text-xs font-semibold hover:bg-white/15"
-            >
-              CC
-            </button>
 
             <div className="relative">
               <button
