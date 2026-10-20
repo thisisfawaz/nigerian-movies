@@ -54,7 +54,7 @@ export function FavouritesList() {
   }
 
   return (
-    <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((movie) => (
         <div key={movie.videoId} className="group relative">
           <Link

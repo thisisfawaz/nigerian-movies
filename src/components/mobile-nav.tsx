@@ -190,6 +190,15 @@ export function MobileNav({
                     </Link>
                   </li>
                 ))}
+                <li>
+                  <Link
+                    href="/movies"
+                    onClick={() => setOpen(false)}
+                    className="block rounded-md px-3 py-2 text-sm font-semibold text-pop hover:bg-surface-hover"
+                  >
+                    All movies
+                  </Link>
+                </li>
               </ul>
             ) : null}
 
