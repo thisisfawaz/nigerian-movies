@@ -241,6 +241,12 @@ export class StaticFileRepository implements MutableCatalogueRepository {
     return [];
   }
 
+  async suggestVideoTitle(_query: string): Promise<string | null> {
+    // Search needs the database; nothing to suggest in static mode.
+    void _query;
+    return null;
+  }
+
   async listMoviesByYear(_year: number, _limit?: number): Promise<RecentVideo[]> {
     // Movie rows live in the database; nothing to read in static mode.
     void _year;

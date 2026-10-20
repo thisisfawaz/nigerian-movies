@@ -635,9 +635,31 @@ export class SupabaseCatalogueRepository implements MutableCatalogueRepository {
     });
   }
 
+  async suggestVideoTitle(query: string): Promise<string | null> {
+    const term = query.trim();
+    if (!term) return null;
+
+    const { data, error } = await this.client.rpc("suggest_video_title", {
+      search_term: term
+    });
+    // A missing function (migration not applied) must not break the page.
+    if (error) return null;
+    return typeof data === "string" ? data : null;
+  }
+
   async searchVideos(query: string, limit = 48): Promise<RecentVideo[]> {
     const term = query.trim();
     if (!term) return [];
+
+    // Normalised form strips spaces, hyphens and punctuation so "spiderman"
+    // matches "Spider-Man" and "the godfather" matches "TheGodfather".
+    const normalized = term.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+    // PostgREST's .or() treats commas and parentheses as filter syntax, and
+    // LIKE treats % and _ as wildcards. Neither is meaningful in a title
+    // search, so strip them rather than escape and risk a malformed filter.
+    const safeTerm = term.replace(/[%_,()]/g, " ").trim();
+    if (!safeTerm) return [];
 
     // Join to the channel so results can link to the right channel, and only
     // include videos of published channels.
@@ -650,7 +672,11 @@ export class SupabaseCatalogueRepository implements MutableCatalogueRepository {
           ? "video_id, title, thumbnail_url, published_at, is_short, duration_seconds, channel_id, channels!inner(name, slug, status)"
           : "video_id, title, thumbnail_url, published_at, is_short, channel_id, channels!inner(name, slug, status)"
       )
-      .ilike("title", `%${term}%`)
+      .or(
+        normalized
+          ? `title.ilike.%${safeTerm}%,title_normalized.like.%${normalized}%`
+          : `title.ilike.%${safeTerm}%`
+      )
       .eq("channels.status", "published")
       .order("published_at", { ascending: false, nullsFirst: false })
       .limit(limit);

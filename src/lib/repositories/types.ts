@@ -48,6 +48,12 @@ export interface CatalogueRepository {
   /** Search movies (videos) by title across published channels. */
   searchVideos(query: string, limit?: number): Promise<RecentVideo[]>;
 
+  /**
+   * Closest known title to a query that returned no results, or null when
+   * nothing is close enough to be worth suggesting.
+   */
+  suggestVideoTitle(query: string): Promise<string | null>;
+
   /** Full movies published within a calendar year, across published channels. */
   listMoviesByYear(year: number, limit?: number): Promise<RecentVideo[]>;
 

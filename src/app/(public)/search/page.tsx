@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { MovieCard } from "@/components/movie-card";
 import { EmptyState } from "@/components/ui";
 import { getCatalogueRepository } from "@/lib/repositories";
@@ -20,6 +22,10 @@ export default async function SearchPage({
     results = await repo.listMoviesByYear(year, 48);
   }
 
+  // Only worth asking for a suggestion when the search found nothing.
+  const suggestion =
+    q && results.length === 0 ? await repo.suggestVideoTitle(q) : null;
+
   const heading = q
     ? `${results.length} of videos for “${q}”`
     : hasYear
@@ -37,10 +43,26 @@ export default async function SearchPage({
         {!q && !hasYear ? (
           <EmptyState title="Start typing to search movies" />
         ) : results.length === 0 ? (
-          <EmptyState
-            title="No movies found"
-            description="Try a different title or year."
-          />
+          <div>
+            <EmptyState
+              title="No movies found"
+              description={
+                suggestion ? undefined : "Try a different title or year."
+              }
+            />
+            {suggestion ? (
+              <p className="mt-2 text-center text-sm text-muted">
+                Did you mean{" "}
+                <Link
+                  href={`/search?q=${encodeURIComponent(suggestion)}`}
+                  className="font-semibold text-pop underline underline-offset-2"
+                >
+                  {suggestion}
+                </Link>
+                ?
+              </p>
+            ) : null}
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {results.map((movie) => (
