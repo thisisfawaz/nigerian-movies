@@ -682,6 +682,12 @@ export class SupabaseCatalogueRepository implements MutableCatalogueRepository {
       .limit(limit);
     if (error) throw new Error(`Failed to search videos: ${error.message}`);
 
+    // Nothing matched literally. Fall back to a similarity-ranked search so a
+    // typo or an unexpected word break still surfaces the film.
+    if (!data || data.length === 0) {
+      return this.searchVideosFuzzy(term, limit);
+    }
+
     return (data as unknown as Array<{
       video_id: string;
       title: string;
@@ -706,6 +712,43 @@ export class SupabaseCatalogueRepository implements MutableCatalogueRepository {
         channelSlug: ch?.slug ?? ""
       };
     });
+  }
+
+  /**
+   * Similarity-ranked search used only when the literal search finds nothing.
+   * The SQL function also returns the channel, so this stays a single query.
+   */
+  private async searchVideosFuzzy(
+    term: string,
+    limit: number
+  ): Promise<RecentVideo[]> {
+    const { data, error } = await this.client.rpc("search_videos_fuzzy", {
+      search_term: term,
+      result_limit: limit
+    });
+    // A missing function must not break search; return no results instead.
+    if (error) return [];
+
+    return (data as unknown as Array<{
+      video_id: string;
+      title: string;
+      thumbnail_url: string | null;
+      published_at: string | null;
+      is_short: boolean;
+      channel_id: string;
+      channel_name: string;
+      channel_slug: string;
+    }>).map((row) => ({
+      videoId: row.video_id,
+      title: row.title,
+      thumbnailUrl: row.thumbnail_url,
+      publishedAt: row.published_at,
+      isShort: row.is_short,
+      durationSeconds: null,
+      channelId: row.channel_id,
+      channelName: row.channel_name,
+      channelSlug: row.channel_slug
+    }));
   }
 
   async listMoviesByYear(year: number, limit = 48): Promise<RecentVideo[]> {
