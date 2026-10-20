@@ -26,6 +26,7 @@ export function BrowseDropdown({
             <li key={category.slug}>
               <Link
                 href={`/categories/${category.slug}`}
+                onClick={(event) => event.currentTarget.blur()}
                 className="block px-4 py-2 text-sm text-muted transition-colors hover:bg-pop hover:text-pop-foreground"
               >
                 {category.name}
@@ -35,6 +36,7 @@ export function BrowseDropdown({
           <li className="border-t border-border">
             <Link
               href="/movies"
+              onClick={(event) => event.currentTarget.blur()}
               className="block px-4 py-2 text-sm font-semibold text-pop hover:bg-pop hover:text-pop-foreground"
             >
               All movies

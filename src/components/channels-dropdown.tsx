@@ -48,6 +48,7 @@ export function ChannelsDropdown({
             <li key={channel.slug}>
               <Link
                 href={`/channel/${channel.slug}`}
+                onClick={(event) => event.currentTarget.blur()}
                 className="block truncate px-4 py-2 text-sm text-muted transition-colors hover:bg-pop hover:text-pop-foreground"
               >
                 {channel.name}
@@ -57,6 +58,7 @@ export function ChannelsDropdown({
           <li className="border-t border-border">
             <Link
               href="/explore"
+              onClick={(event) => event.currentTarget.blur()}
               className="block px-4 py-2 text-sm font-semibold text-pop hover:bg-pop hover:text-pop-foreground"
             >
               All channels
