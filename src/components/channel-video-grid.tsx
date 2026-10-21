@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { FavouriteButton } from "@/components/favourite-button";
 import { ExternalLinkIcon } from "@/components/icons";
@@ -18,8 +18,12 @@ interface Video {
   title: string;
   thumbnailUrl: string | null;
   isShort: boolean;
+  durationSeconds: number | null;
   publishedAt: string | null;
 }
+
+/** A movie must run at least this long to count as watched. */
+const MIN_HISTORY_SECONDS = 59 * 60;
 
 interface ChannelHeaderInfo {
   name: string;
@@ -57,6 +61,38 @@ export function ChannelVideoGrid({
   const playing =
     (current ? allById.get(current) : undefined) ?? fullMovies[0] ?? videos[0];
 
+  /**
+   * Records a movie in watch history, but only when it is a genuine movie:
+   * full length (59 minutes or more) rather than a teaser or short clip.
+   * Best-effort — a failure never interrupts playback.
+   */
+  const recordIfMovie = (video: Video) => {
+    if (video.isShort) return;
+    if (video.durationSeconds === null) return;
+    if (video.durationSeconds < MIN_HISTORY_SECONDS) return;
+    recordWatch({
+      videoId: video.videoId,
+      title: video.title,
+      thumbnailUrl: video.thumbnailUrl,
+      channelSlug,
+      channelName
+    }).catch(() => {
+      // History is best-effort; never interrupt playback.
+    });
+  };
+
+  // Arriving with ?v= means the visitor clicked a movie elsewhere (homepage,
+  // search, favourites, movies, history). The auto-selected first movie has no
+  // ?v=, so it is never recorded without a click.
+  const arrivedWithVideo = searchParams.get("v");
+  useEffect(() => {
+    if (!arrivedWithVideo) return;
+    const video = videos.find((v) => v.videoId === arrivedWithVideo);
+    if (video) recordIfMovie(video);
+    // Only on first arrival for this video.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivedWithVideo]);
+
   const select = (videoId: string) => {
     setCurrent(videoId);
     const url = new URL(window.location.href);
@@ -64,20 +100,8 @@ export function ChannelVideoGrid({
     window.history.replaceState(null, "", url.toString());
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    // Only an explicit click is recorded. The video a channel page selects on
-    // load is a page default, not a choice, so it is deliberately skipped.
     const picked = videos.find((v) => v.videoId === videoId);
-    if (picked) {
-      recordWatch({
-        videoId: picked.videoId,
-        title: picked.title,
-        thumbnailUrl: picked.thumbnailUrl,
-        channelSlug,
-        channelName
-      }).catch(() => {
-        // History is best-effort; never interrupt playback.
-      });
-    }
+    if (picked) recordIfMovie(picked);
   };
 
   return (

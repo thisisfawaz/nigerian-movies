@@ -72,6 +72,7 @@ export default async function ChannelDetailPage({
               title: v.title,
               thumbnailUrl: v.thumbnailUrl,
               isShort: v.isShort,
+              durationSeconds: v.durationSeconds,
               publishedAt: v.publishedAt
             }))}
           />
