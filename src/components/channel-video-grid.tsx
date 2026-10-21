@@ -11,6 +11,7 @@ import { VideoThumbnail } from "@/components/video-thumbnail";
 import { MovieTitle } from "@/components/movie-title";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { cleanTitle } from "@/lib/titles";
+import { recordWatch } from "@/lib/watch-history";
 
 interface Video {
   videoId: string;
@@ -62,6 +63,21 @@ export function ChannelVideoGrid({
     url.searchParams.set("v", videoId);
     window.history.replaceState(null, "", url.toString());
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Only an explicit click is recorded. The video a channel page selects on
+    // load is a page default, not a choice, so it is deliberately skipped.
+    const picked = videos.find((v) => v.videoId === videoId);
+    if (picked) {
+      recordWatch({
+        videoId: picked.videoId,
+        title: picked.title,
+        thumbnailUrl: picked.thumbnailUrl,
+        channelSlug,
+        channelName
+      }).catch(() => {
+        // History is best-effort; never interrupt playback.
+      });
+    }
   };
 
   return (

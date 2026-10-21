@@ -11,6 +11,7 @@ import {
   FilmIcon,
   GridIcon,
   HeartIcon,
+  HistoryIcon,
   MenuIcon,
   PlusIcon,
   UserIcon
@@ -297,6 +298,15 @@ export function MobileNav({
                         className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-hover"
                       >
                         My Favourites
+                      </Link>
+                      <Link
+                        href="/history"
+                        role="menuitem"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface-hover"
+                      >
+                        <HistoryIcon className="h-4 w-4 text-muted" />
+                        Watch History
                       </Link>
                       <button
                         type="button"

@@ -67,6 +67,14 @@ export function UserMenu({
           >
             My Favourites
           </Link>
+          <Link
+            href="/history"
+            role="menuitem"
+            className="block px-4 py-2 text-sm hover:bg-surface-hover"
+            onClick={() => setOpen(false)}
+          >
+            Watch History
+          </Link>
           <button
             type="button"
             role="menuitem"
