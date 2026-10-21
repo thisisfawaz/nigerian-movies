@@ -57,7 +57,7 @@ type YTPlayer = {
   setPlaybackRate: (rate: number) => void;
   getPlaybackRate: () => number;
   getAvailablePlaybackRates: () => number[];
-  toggleCaptions: () => void;
+  setOption: (module: string, option: string, value: unknown) => void;
   destroy: () => void;
   addEventListener: (event: string, cb: (e: { data: number }) => void) => void;
 };
@@ -142,6 +142,14 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
     if (playing) armIdle();
   };
 
+  /**
+   * Hover only exists on devices with a fine pointer. On touch, the pointer
+   * events that fire before a tap must not reveal the bar, otherwise the tap
+   * could never hide it.
+   */
+  const isHoverPointer = (event: { pointerType?: string }) =>
+    event.pointerType !== "touch";
+
   const clearIdle = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current);
     idleTimer.current = null;
@@ -187,19 +195,23 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
               setMuted(player.isMuted());
               onReady?.();
 
-              // Forcefully attempt to disable captions on load.
-              // We use a slight delay to ensure the caption module has initialized
-              // before we attempt to unload it, which is more reliable than setOption.
-              setTimeout(() => {
+              // Captions are not offered at all. cc_load_policy: 0 only stops
+              // YouTube auto-enabling them, so the active track has to be cleared
+              // explicitly. setOption is the documented way; unloadModule is not
+              // reliable and let viewer-preference captions through. Repeat a few
+              // times because the captions module re-initialises shortly after
+              // the player becomes ready.
+              const disableCaptions = () => {
                 try {
-                  // @ts-ignore - unloadModule is part of the underlying YouTube API
-                  player.unloadModule('captions');
-                  // @ts-ignore
-                  player.unloadModule('cc');
+                  player.setOption("captions", "track", {});
                 } catch {
-                  // Silently fail if the module isn't loaded or supported
+                  // Module not ready yet; a later attempt will catch it.
                 }
-              }, 500);
+              };
+              disableCaptions();
+              [200, 500, 1000, 2000].forEach((delay) =>
+                setTimeout(disableCaptions, delay)
+              );
             },
             onStateChange: (event) => {
               if (cancelled) return;
@@ -207,6 +219,13 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
                 setPlaying(true);
                 setPaused(false);
                 armIdle();
+                // Some viewers' YouTube preference re-enables captions when
+                // playback starts, so clear the track again here.
+                try {
+                  player.setOption("captions", "track", {});
+                } catch {
+                  // Captions module unavailable; nothing to disable.
+                }
               } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
                 setPlaying(false);
                 // Hide the bar immediately on pause, and cover YouTube's bottom
@@ -228,6 +247,11 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
     return () => {
       cancelled = true;
       clearIdle();
+      try {
+        playerRef.current?.setOption("captions", "track", {});
+      } catch {
+        // Player already torn down.
+      }
       playerRef.current?.destroy();
       playerRef.current = null;
     };
@@ -384,15 +408,22 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
       />
 
       {/* Reveal layer. Sits beneath the centre button so it never swallows the
-          button's clicks. A single tap brings the controls back; a double tap on
-          the left or right half seeks back or forward. */}
+          button's clicks. A single tap toggles the controls: hidden bars go
+          away instantly, visible ones come back. A double tap on the left or
+          right half seeks back or forward. */}
       <button
         type="button"
         tabIndex={-1}
         aria-hidden="true"
         onClick={() => {
-          setShowBar(true);
-          if (playing) armIdle();
+          if (showBar) {
+            // Hide immediately; no idle timer needed.
+            clearIdle();
+            setShowBar(false);
+            setSettingsOpen(false);
+            return;
+          }
+          revealBar();
         }}
         onDoubleClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
@@ -408,9 +439,12 @@ export function YouTubePlayer({ videoId, title, onReady }: YouTubePlayerProps) {
           setShowBar(true);
           if (playing) armIdle();
         }}
-        onPointerEnter={revealBar}
-        onPointerMove={revealBar}
-        onPointerDown={revealBar}
+        onPointerEnter={(event) => {
+          if (isHoverPointer(event)) revealBar();
+        }}
+        onPointerMove={(event) => {
+          if (isHoverPointer(event)) revealBar();
+        }}
         className="absolute inset-0 h-full w-full cursor-default bg-transparent"
       />
 
