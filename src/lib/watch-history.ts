@@ -57,20 +57,12 @@ export async function listHistory(): Promise<WatchedMovie[]> {
  * is a background write and should never interrupt playback.
  */
 export async function recordWatch(movie: WatchedMovie): Promise<void> {
-  console.log("[history] recordWatch called", movie.videoId);
   const client = getBrowserClient();
-  if (!client) {
-    console.log("[history] no browser client");
-    return;
-  }
+  if (!client) return;
   const {
     data: { user }
   } = await client.auth.getUser();
-  if (!user) {
-    console.log("[history] not signed in");
-    return;
-  }
-  console.log("[history] writing for user", user.id);
+  if (!user) return;
 
   const { error } = await client.from("watch_history").upsert(
     {
@@ -84,11 +76,7 @@ export async function recordWatch(movie: WatchedMovie): Promise<void> {
     },
     { onConflict: "user_id,video_id" }
   );
-  if (error) {
-    console.log("[history] write failed:", error.message);
-    throw new Error(error.message);
-  }
-  console.log("[history] write ok");
+  if (error) throw new Error(error.message);
 
   emit();
   await pruneOldEntries(client, user.id);
